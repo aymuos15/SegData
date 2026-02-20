@@ -1,0 +1,20 @@
+{
+  "name": "MSLesSeg Multiple Sclerosis Lesion Segmentation",
+  "description": "3D MRI FLAIR dataset for MS white matter lesion segmentation. 115 scan series from 75 patients (50 RRMS, 5 PPMS), preprocessed to 182\u00d7218\u00d7182 voxels at 1mm isotropic MNI152 space.",
+  "reference": "https://springernature.figshare.com/articles/dataset/MSLesSeg_baseline_and_benchmarking_of_a_new_Multiple_Sclerosis_Lesion_Segmentation_dataset/27919209",
+  "citation": "Guarnera, F., Rondinella, A., Crispino, E. et al. MSLesSeg: baseline and benchmarking of a new Multiple Sclerosis Lesion Segmentation dataset. Sci Data 12, 920 (2025). https://doi.org/10.1038/s41597-025-05250-y",
+  "license": "CC BY 4.0",
+  "release": "1.0",
+  "tensorImageSize": "3D",
+  "file_ending": ".nii.gz",
+  "channel_names": {
+    "0": "FLAIR"
+  },
+  "labels": {
+    "0": "background",
+    "1": "lesion"
+  },
+  "numTraining": 93,
+  "numTest": 22,
+  "numLabels": 2
+}

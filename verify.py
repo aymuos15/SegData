@@ -11,6 +11,8 @@ import json
 import sys
 from pathlib import Path
 
+import nibabel as nib
+import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
@@ -387,15 +389,27 @@ class DatasetValidator:
         channel_dims_failed,
     ):
         """Check dimensions for a case."""
-        label_img = Image.open(label_file)
-        label_shape = label_img.size
+        # Handle NIfTI files
+        if file_ending in (".nii.gz", ".nii"):
+            label_nib = nib.load(label_file)
+            label_shape = label_nib.shape
+        else:
+            # PIL for PNG/other image formats
+            label_img = Image.open(label_file)
+            label_shape = label_img.size
 
         first_channel_file = images_tr / f"{case_id}_0000{file_ending}"
         if not first_channel_file.exists():
             return
 
-        first_img = Image.open(first_channel_file)
-        img_shape = first_img.size
+        # Handle NIfTI files
+        if file_ending in (".nii.gz", ".nii"):
+            first_nib = nib.load(first_channel_file)
+            img_shape = first_nib.shape
+        else:
+            # PIL for PNG/other image formats
+            first_img = Image.open(first_channel_file)
+            img_shape = first_img.size
 
         if img_shape != label_shape:
             dims_failed.append((case_id, img_shape, label_shape))
@@ -404,15 +418,36 @@ class DatasetValidator:
         for ch in range(num_channels):
             ch_file = images_tr / f"{case_id}_{ch:04d}{file_ending}"
             if ch_file.exists():
-                ch_img = Image.open(ch_file)
-                if ch_img.size != img_shape:
-                    channel_dims_failed.append((case_id, ch, ch_img.size, img_shape))
+                if file_ending in (".nii.gz", ".nii"):
+                    ch_nib = nib.load(ch_file)
+                    ch_shape = ch_nib.shape
+                else:
+                    # PIL for PNG/other image formats
+                    ch_img = Image.open(ch_file)
+                    ch_shape = ch_img.size
+
+                if ch_shape != img_shape:
+                    channel_dims_failed.append((case_id, ch, ch_shape, img_shape))
 
     def _check_label_values(self, label_file, case_id, labels_dict, invalid_label_values):
         """Check label pixel values."""
-        label_img = Image.open(label_file)
-        label_array = label_img.get_flattened_data()
-        max_label = max(label_array) if label_array else 0
+        # Determine file type from file extension
+        file_ending = label_file.suffix
+        if file_ending == ".gz" and label_file.name.endswith(".nii.gz"):
+            file_ending = ".nii.gz"
+
+        # Handle NIfTI files
+        if file_ending in (".nii.gz", ".nii"):
+            label_nib = nib.load(label_file)
+            label_array = np.array(label_nib.dataobj)
+            label_values = np.unique(label_array)
+            max_label = int(label_values.max()) if len(label_values) > 0 else 0
+        else:
+            # PIL for PNG/other image formats
+            label_img = Image.open(label_file)
+            label_array = label_img.get_flattened_data()
+            max_label = max(label_array) if label_array else 0
+
         if max_label >= len(labels_dict) and max_label != 255:
             invalid_label_values.append((case_id, max_label, len(labels_dict) - 1))
 

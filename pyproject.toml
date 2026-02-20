@@ -24,17 +24,11 @@ classifiers = [
 ]
 
 dependencies = [
+    "cupy-cuda11x",
+    "matplotlib>=3.8.0",
+    "nibabel>=5.0.0",
     "pillow>=10.0.0",
     "tqdm>=4.60.0",
-]
-
-[project.optional-dependencies]
-viz = [
-    "matplotlib>=3.8.0",
-]
-dev = [
-    "ruff>=0.9.0",
-    "ty>=0.0.17",
 ]
 
 [project.scripts]
@@ -50,7 +44,6 @@ exclude = [
     ".git",
     "__pycache__",
     ".venv",
-    ".pytest_cache",
 ]
 
 [tool.ruff.lint]
@@ -72,11 +65,3 @@ known-first-party = ["verify"]
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
-
-[tool.ty]
-# Type checker configuration for ty
-# See: https://docs.astral.sh/ty/reference/configuration/
-
-[tool.ty.rules]
-# Allow unresolved imports since we're a simple script project
-unresolved-import = "warn"
