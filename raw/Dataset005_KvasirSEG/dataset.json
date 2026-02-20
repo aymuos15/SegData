@@ -1,0 +1,22 @@
+{
+  "name": "Kvasir-SEG Polyp Segmentation",
+  "description": "2D gastrointestinal polyp segmentation from colonoscopy. 1000 images with binary masks. 80/20 train/test split applied.",
+  "reference": "https://datasets.simula.no/kvasir-seg/",
+  "citation": "Jha, D. et al. Kvasir-SEG: A Segmented Polyp Dataset. MMM 2020. https://doi.org/10.1007/978-3-030-37734-2_37",
+  "license": "Research/Educational use only - https://datasets.simula.no/kvasir-seg/",
+  "release": "1.0",
+  "tensorImageSize": "2D",
+  "file_ending": ".png",
+  "channel_names": {
+    "0": "red",
+    "1": "green",
+    "2": "blue"
+  },
+  "labels": {
+    "0": "background",
+    "1": "polyp"
+  },
+  "numTraining": 800,
+  "numTest": 200,
+  "numLabels": 2
+}
