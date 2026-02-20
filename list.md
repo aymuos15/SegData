@@ -7,3 +7,4 @@
 | MOTUM Brain Tumor MRI | 3D | 51 | 13 | 3 | .nii.gz | CC BY 4.0 | https://doi.gin.g-node.org/10.12751/g-node.tvzqc5 |
 | Kvasir-SEG Polyp Segmentation | 2D | 800 | 200 | 2 | .png | Research/Educational | https://datasets.simula.no/kvasir-seg/ |
 | BUS-BRA Breast Ultrasound Segmentation | 2D | 1500 | 375 | 2 | .png | CC BY 4.0 | https://zenodo.org/records/8231412 |
+| BTXRD Bone Tumor X-ray Radiograph | 2D | 1493 | 374 | 2 | .png | CC BY 4.0 | https://doi.org/10.6084/m9.figshare.27865398 |

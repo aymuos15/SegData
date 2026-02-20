@@ -1,0 +1,20 @@
+{
+  "name": "BTXRD Bone Tumor X-ray Radiograph Dataset",
+  "description": "2D bone tumor X-ray radiograph dataset with binary segmentation masks. 1,867 annotated tumor images (1,525 benign + 342 malignant) from a multi-institution study. Normal radiographs are excluded as they have no segmentation annotations. 80/20 train/test split applied algorithmically by sorted filename.",
+  "reference": "https://doi.org/10.6084/m9.figshare.27865398",
+  "citation": "Bhatt, P. et al. A Radiograph Dataset for the Classification, Localization, and Segmentation of Primary Bone Tumors. Scientific Data 12, 2025. https://doi.org/10.1038/s41597-024-04311-y",
+  "license": "CC BY 4.0",
+  "release": "1.0",
+  "tensorImageSize": "2D",
+  "file_ending": ".png",
+  "channel_names": {
+    "0": "xray"
+  },
+  "labels": {
+    "0": "background",
+    "1": "tumor"
+  },
+  "numTraining": 1493,
+  "numTest": 374,
+  "numLabels": 2
+}
