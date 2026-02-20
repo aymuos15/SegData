@@ -68,6 +68,30 @@ python stats.py    # View dataset statistics
 
 Then use with nnU-Net or other segmentation frameworks.
 
+## Testing
+
+Verify that all datasets have the required structure and files:
+
+```bash
+# Install dependencies (if not already done)
+uv sync
+
+# Run all dataset consistency tests
+uv run pytest tests/
+
+# Run with verbose output
+uv run pytest tests/ -v
+
+# Test a specific dataset
+uv run pytest tests/ -k Dataset005
+```
+
+Tests check that each dataset has:
+- Required files: `dataset.json`, `setup.py`, `stats.py`, `plot.py`
+- Documentation: `info.md` or `get.md`
+- Valid `dataset.json` metadata
+- Proper directory structure
+
 # Contributing
 
 Coming soon. Although open to PRs which clearly follow the current system to add datasets.
