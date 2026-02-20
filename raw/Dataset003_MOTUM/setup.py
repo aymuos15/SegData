@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""
+Setup script to convert MOTUM dataset to nnUNet format.
+- Reads BIDS-formatted dataset (sub-XXXX/anat/ and derivatives/sub-XXXX/)
+- Organizes 3D NIfTI 4-channel (FLAIR, T1, T2, T1ce) files
+- Merges two segmentation labels (FLAIR + T1ce) into 3-class mask
+- Separates train/test split (80/20)
+- Saves in nnUNet format
+"""
+
+import json
+import re
+from pathlib import Path
+
+import nibabel as nib
+import numpy as np
+from tqdm import tqdm
+
+
+def extract_subject_id(subject_dir):
+    """Extract numeric ID from sub-XXXX directory name."""
+    match = re.match(r"sub-(\d+)", subject_dir.name)
+    if match:
+        return int(match.group(1))
+    return 0
+
+
+def find_matching_file(directory, patterns):
+    """Find first file matching any pattern (case-insensitive)."""
+    if not directory.exists():
+        return None
+    for item in directory.iterdir():
+        if item.is_file():
+            lower_name = item.name.lower()
+            for pattern in patterns:
+                if pattern.lower() in lower_name:
+                    return item
+    return None
+
+
+def setup_dataset():
+    """Convert MOTUM BIDS dataset to nnUNet format."""
+
+    dataset_dir = Path(__file__).parent
+
+    # nnUNet structure (in-place)
+    images_tr = dataset_dir / "imagesTr"
+    labels_tr = dataset_dir / "labelsTr"
+    images_ts = dataset_dir / "imagesTs"
+    labels_ts = dataset_dir / "labelsTs"
+
+    # Create directories
+    for d in [images_tr, labels_tr, images_ts, labels_ts]:
+        d.mkdir(parents=True, exist_ok=True)
+
+    # Find all subject directories (BIDS format: sub-XXXX)
+    print("Looking for BIDS subject directories...")
+    subject_dirs = sorted(
+        [d for d in dataset_dir.iterdir() if d.is_dir() and d.name.startswith("sub-")],
+        key=extract_subject_id,
+    )
+
+    if not subject_dirs:
+        print("Error: No subject directories (sub-XXXX) found")
+        return
+
+    print(f"Found {len(subject_dirs)} subject directories")
+
+    # Apply 80/20 split
+    split_idx = int(0.8 * len(subject_dirs))
+    train_subjects = subject_dirs[:split_idx]
+    test_subjects = subject_dirs[split_idx:]
+
+    print(f"Split: {len(train_subjects)} train, {len(test_subjects)} test")
+
+    # Process training cases
+    print("Processing training cases...")
+    for idx, subject_dir in enumerate(tqdm(train_subjects)):
+        case_id = f"{idx:03d}"
+        process_subject(dataset_dir, subject_dir, case_id, images_tr, labels_tr)
+
+    # Process test cases
+    print("Processing test cases...")
+    for idx, subject_dir in enumerate(tqdm(test_subjects)):
+        case_id = f"{idx:03d}"
+        process_subject(dataset_dir, subject_dir, case_id, images_ts, labels_ts)
+
+    # Update dataset.json
+    print("Updating dataset.json...")
+    dataset_json_path = dataset_dir / "dataset.json"
+
+    with open(dataset_json_path, "r") as f:
+        dataset_json = json.load(f)
+
+    dataset_json["numTraining"] = len(train_subjects)
+    dataset_json["numTest"] = len(test_subjects)
+
+    with open(dataset_json_path, "w") as f:
+        json.dump(dataset_json, f, indent=2)
+
+    print(f"✓ Dataset converted to nnUNet format at {dataset_dir}")
+    print(f"  - Training cases: {len(train_subjects)}")
+    print(f"  - Training images: {len(list(images_tr.glob('*_0000.nii.gz')))} cases × 4 channels")
+    print(f"  - Training labels: {len(list(labels_tr.glob('*.nii.gz')))} merged masks")
+    print(f"  - Test cases: {len(test_subjects)}")
+    print(f"  - Test images: {len(list(images_ts.glob('*_0000.nii.gz')))} cases × 4 channels")
+    print(f"  - Test labels: {len(list(labels_ts.glob('*.nii.gz')))} merged masks")
+    print(f"  - dataset.json updated")
+
+
+def process_subject(dataset_dir, subject_dir, case_id, images_dir, labels_dir):
+    """
+    Process a single BIDS subject: find 4 MRI channels and merge two label files.
+
+    Image locations: subject_dir/anat/{subject}_{modality}.nii.gz
+    Label locations: dataset_dir/derivatives/{subject}/
+
+    Channels: FLAIR, T1, T2, T1ce (saved as _0000, _0001, _0002, _0003)
+    Labels: Merge flair_seg_label1 and t1ce_seg_label2 into 3-class mask
+    """
+
+    anat_dir = subject_dir / "anat"
+    deriv_dir = dataset_dir / "derivatives" / subject_dir.name
+
+    if not anat_dir.exists():
+        print(f"Warning: anat directory not found for {subject_dir.name}")
+        return
+
+    # Find 4 MRI channel files in anat/
+    flair_file = find_matching_file(anat_dir, ["flair"])
+    t1_file = find_matching_file(anat_dir, ["_t1.nii", "t1_"])
+    t2_file = find_matching_file(anat_dir, ["_t2.nii", "t2_"])
+    t1ce_file = find_matching_file(anat_dir, ["t1ce"])
+
+    # Check for required channels
+    if not flair_file:
+        print(f"Warning: FLAIR not found in {anat_dir}")
+        return
+
+    # FLAIR is required; others expected in MOTUM
+    channels = [flair_file, t1_file, t2_file, t1ce_file]
+    if any(ch is None for ch in channels):
+        print(f"Warning: Not all 4 channels found in {subject_dir.name}")
+        return
+
+    # Copy 4 channels to nnUNet format
+    try:
+        import shutil
+        for ch_idx, channel_file in enumerate(channels):
+            if channel_file:
+                shutil.copy(channel_file, images_dir / f"{case_id}_{ch_idx:04d}.nii.gz")
+    except Exception as e:
+        print(f"Error copying image channels for case {case_id}: {e}")
+        return
+
+    # Find and merge two label files in derivatives/
+    if not deriv_dir.exists():
+        print(f"Warning: derivatives directory not found for {subject_dir.name}")
+        return
+
+    label1_file = find_matching_file(deriv_dir, ["flair_seg_label1"])
+    label2_file = find_matching_file(deriv_dir, ["t1ce_seg_label2"])
+
+    if not label1_file and not label2_file:
+        print(f"Warning: No segmentation labels found in {deriv_dir}")
+        return
+
+    # Load labels
+    try:
+        if label1_file:
+            label1_nib = nib.load(label1_file)
+            label1 = np.array(label1_nib.get_fdata(), dtype=np.uint8)
+        else:
+            label1 = None
+
+        if label2_file:
+            label2_nib = nib.load(label2_file)
+            label2 = np.array(label2_nib.get_fdata(), dtype=np.uint8)
+        else:
+            label2 = None
+
+        # Merge labels: 0=bg, 1=FLAIR-only, 2=T1ce-enhancing
+        if label1 is not None and label2 is not None:
+            # Both available: merge with priority to label2 (T1ce)
+            label_merged = np.zeros_like(label1)
+            label_merged[label1 == 1] = 1
+            label_merged[label2 == 1] = 2  # Overwrites in overlap
+            merged_nib = nib.Nifti1Image(label_merged, label1_nib.affine, label1_nib.header)
+        elif label1 is not None:
+            # Only FLAIR available
+            label_merged = np.where(label1 > 0, 1, 0).astype(np.uint8)
+            merged_nib = nib.Nifti1Image(label_merged, label1_nib.affine, label1_nib.header)
+        else:
+            # Only T1ce available
+            label_merged = np.where(label2 > 0, 2, 0).astype(np.uint8)
+            merged_nib = nib.Nifti1Image(label_merged, label2_nib.affine, label2_nib.header)
+
+        # Save merged label
+        nib.save(merged_nib, labels_dir / f"{case_id}.nii.gz")
+
+    except Exception as e:
+        print(f"Error processing labels for case {case_id}: {e}")
+        return
+
+
+if __name__ == "__main__":
+    setup_dataset()
