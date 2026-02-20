@@ -1,6 +1,6 @@
 # SegData Repository
 
-This is a data repository containing segmentation datasets in **nnU-Net format**.
+This repo has (some opinionated) code to setup common opensource datasets in the **nnU-Net format**. Only those datasts will be added which are openly accessible and do not have a request form to fill out which bars accessibility. The goal is to make it easy for researchers to quickly get up and running with a variety of datasets for segmentation tasks, without needing to worry about data formatting or preprocessing.
 
 ## Repository Structure
 
@@ -67,3 +67,7 @@ python stats.py    # View dataset statistics
 ```
 
 Then use with nnU-Net or other segmentation frameworks.
+
+# Contributing
+
+Coming soon. Although open to PRs which clearly follow the current system to add datasets.
