@@ -1,11 +1,32 @@
 #!/usr/bin/env python3
 """
 Setup script to convert MOTUM dataset to nnUNet format.
+
+Prerequisites:
+- Place the downloaded zip file in this directory
+- Zip must contain BIDS-formatted structure:
+  * sub-XXXX/anat/ - Contains 4 MRI sequences (FLAIR, T1, T2, T1ce)
+  * derivatives/sub-XXXX/ - Contains segmentation labels
+
+Processing:
 - Reads BIDS-formatted dataset (sub-XXXX/anat/ and derivatives/sub-XXXX/)
-- Organizes 3D NIfTI 4-channel (FLAIR, T1, T2, T1ce) files
-- Merges two segmentation labels (FLAIR + T1ce) into 3-class mask
-- Separates train/test split (80/20)
-- Saves in nnUNet format
+- Extracts 4 MRI channels per case (FLAIR, T1, T2, T1ce)
+- Merges two segmentation labels (FLAIR + T1ce) into 3-class semantic mask:
+  * 0 = background
+  * 1 = FLAIR lesion only
+  * 2 = T1ce-enhancing (tumor/active)
+- Applies 80/20 train/test split (sorted by patient ID)
+- Saves organized files in nnUNet format
+
+Usage:
+    python setup.py
+
+Output:
+    imagesTr/      → Training CT images (4 channels each)
+    labelsTr/      → Training segmentation masks (3-class)
+    imagesTs/      → Test CT images (4 channels each)
+    labelsTs/      → Test segmentation masks (3-class)
+    dataset.json   → Updated metadata with actual case counts
 """
 
 import json
