@@ -1,0 +1,20 @@
+{
+  "name": "BUS-BRA Breast Ultrasound Segmentation",
+  "description": "2D breast ultrasound dataset with binary tumor segmentation masks. 1,064 patients with BI-RADS categories 2-5. 80/20 train/test split applied algorithmically.",
+  "reference": "https://zenodo.org/records/8231412",
+  "citation": "Wilfrido G\u00f3mez-Flores, Maria Julia Gregorio-Calas, Wagner Coelho de Albuquerque Pereira. BUS-BRA: A Breast Ultrasound Dataset for Assessing Computer-aided Diagnosis Systems. Medical Physics, 51:3110\u20133123, 2024. https://doi.org/10.1002/mp.16812",
+  "license": "CC BY 4.0",
+  "release": "1.0",
+  "tensorImageSize": "2D",
+  "file_ending": ".png",
+  "channel_names": {
+    "0": "ultrasound"
+  },
+  "labels": {
+    "0": "background",
+    "1": "tumor"
+  },
+  "numTraining": 1500,
+  "numTest": 375,
+  "numLabels": 2
+}
