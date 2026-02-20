@@ -5,14 +5,18 @@
 *.nii
 *.nii.gz
 
+# Dataset directories (images, labels, results)
+imagesTr/
+labelsTr/
+imagesTs/
+labelsTs/
+results/
+
 # Dataset zips
 *.zip
 
 # Temporary extraction directories
 temp_*/
-
-# Results and analysis output
-results/
 
 # Python
 __pycache__/
