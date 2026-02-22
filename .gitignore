@@ -56,6 +56,9 @@ uv.lock
 *.swo
 *~
 
+# Scripts (machine-specific)
+scripts/transfer.sh
+
 # OS
 .DS_Store
 Thumbs.db
