@@ -11,8 +11,8 @@
     "0": "xray"
   },
   "labels": {
-    "0": "background",
-    "1": "tumor"
+    "background": 0,
+    "tumor": 1
   },
   "numTraining": 1493,
   "numTest": 374,

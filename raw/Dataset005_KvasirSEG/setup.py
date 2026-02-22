@@ -117,7 +117,7 @@ def setup_dataset():
         "tensorImageSize": "2D",
         "file_ending": ".png",
         "channel_names": {"0": "red", "1": "green", "2": "blue"},
-        "labels": {"0": "background", "1": "polyp"},
+        "labels": {"background": 0, "polyp": 1},
         "numTraining": len(train_files),
         "numTest": len(test_files),
         "numLabels": 2,

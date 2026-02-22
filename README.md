@@ -73,7 +73,7 @@ uv run pytest tests/ -k Dataset005
 
 ### Test Coverage
 
-- **test_datasets.py** (24 tests): Validates every dataset has required files, valid `dataset.json`, and consistent directory structure
+- **test_datasets.py** (30 tests): Validates every dataset has required files, valid `dataset.json`, correct nnUNetv2 labels format, and consistent directory structure
 - **test_setup_scripts.py** (28 tests): Unit tests for dataset setup.py helper functions
   - Dataset005_BUSBRA: Image discovery, mask finding (6 tests)
   - Dataset006_BTXRD: Data root detection, CSV parsing, image lookup, COCO rasterization (18 tests)
@@ -91,6 +91,7 @@ All datasets conform to the nnU-Net data format:
 - **3D datasets**: NIfTI files (`.nii.gz`), integer label masks
 - **Naming**: `{case_id}_{channel_id}.{ext}` for images, `{case_id}.{ext}` for labels
   - Example: `000_0000.png`, `001_0002.nii.gz`
+- **Labels**: nnUNetv2 format — label names as keys, integer values: `{"background": 0, "lesion": 1}`
 - **Metadata**: `dataset.json` with dataset info, license, and citation
 
 ## Results Directory

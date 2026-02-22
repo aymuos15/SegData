@@ -13,8 +13,8 @@
     "2": "blue"
   },
   "labels": {
-    "0": "background",
-    "1": "cell"
+    "background": 0,
+    "cell": 1
   },
   "numTraining": 540,
   "numTest": 68,

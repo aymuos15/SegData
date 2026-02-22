@@ -91,7 +91,7 @@ def setup_dataset():
         "tensorImageSize": "3D",
         "file_ending": ".nii.gz",
         "channel_names": {"0": "FLAIR"},
-        "labels": {"0": "background", "1": "lesion"},
+        "labels": {"background": 0, "lesion": 1},
         "numTraining": len(train_cases),
         "numTest": len(test_cases),
         "numLabels": 2,

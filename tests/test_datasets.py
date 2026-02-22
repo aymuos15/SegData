@@ -68,6 +68,30 @@ class TestDatasets:
         missing_keys = required_keys - set(data.keys())
         assert not missing_keys, f"dataset.json missing keys: {missing_keys}"
 
+    def test_labels_format(self, dataset_dir):
+        """Labels must use nnUNetv2 format: name keys with int values, background=0."""
+        dataset_json = dataset_dir / "dataset.json"
+        assert dataset_json.exists(), "dataset.json not found"
+
+        with open(dataset_json) as f:
+            data = json.load(f)
+
+        labels = data.get("labels", {})
+        assert labels, "labels dict is empty"
+
+        # Keys must be label name strings, values must be ints
+        for key, val in labels.items():
+            assert isinstance(key, str), f"Label key {key!r} must be a string name, not an int key"
+            assert isinstance(val, int), f"Label value for {key!r} must be an int, got {type(val)}"
+
+        # Background label must exist with value 0
+        assert "background" in labels, "Background label not declared (must be 'background': 0)"
+        assert labels["background"] == 0, f"Background label must be 0, got {labels['background']}"
+
+        # Values must be sequential starting at 0
+        values = sorted(labels.values())
+        assert values == list(range(len(values))), f"Label values must be sequential: {values}"
+
     def test_data_structure(self, dataset_dir):
         """If data directories exist, they should not be empty."""
         all_exist = all((dataset_dir / d).exists() for d in REQUIRED_DIRS)

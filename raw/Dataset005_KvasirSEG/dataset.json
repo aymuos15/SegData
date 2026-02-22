@@ -13,8 +13,8 @@
     "2": "blue"
   },
   "labels": {
-    "0": "background",
-    "1": "polyp"
+    "background": 0,
+    "polyp": 1
   },
   "numTraining": 800,
   "numTest": 200,

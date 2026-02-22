@@ -14,9 +14,9 @@
     "3": "T1ce"
   },
   "labels": {
-    "0": "background",
-    "1": "tumor_flair",
-    "2": "tumor_enhancing"
+    "background": 0,
+    "tumor_flair": 1,
+    "tumor_enhancing": 2
   },
   "numTraining": 51,
   "numTest": 13,

@@ -145,12 +145,22 @@ class DatasetValidator:
                 "PASS", f"channel_names keys are sequential: {list(channel_names.keys())}"
             )
 
-        # Check labels keys are sequential string ints
+        # Check labels: keys are label names, values are sequential ints starting at 0
         labels = self.dataset_json_data.get("labels", {})
-        if not self._is_sequential_int_keys(labels):
-            self._print_result("FAIL", "labels keys must be sequential string ints starting at '0'")
+        if not self._is_valid_labels(labels):
+            self._print_result(
+                "FAIL",
+                "labels must map label names to sequential ints starting at 0 "
+                '(e.g., {"background": 0, "lesion": 1})',
+            )
         else:
-            self._print_result("PASS", f"labels keys are sequential: {list(labels.keys())}")
+            self._print_result("PASS", f"labels are valid: {labels}")
+
+        # Check background label is declared
+        if "background" not in labels or labels.get("background") != 0:
+            self._print_result("FAIL", "Background label not declared (must be 'background': 0)")
+        else:
+            self._print_result("PASS", "Background label correctly declared")
 
         # Check numLabels matches len(labels)
         num_labels = self.dataset_json_data.get("numLabels")
@@ -162,6 +172,20 @@ class DatasetValidator:
             )
         else:
             self._print_result("PASS", f"numLabels matches len(labels): {num_labels}")
+
+    def _is_valid_labels(self, d):
+        """Check if labels dict maps string names to sequential ints starting at 0."""
+        if not d:
+            return False
+        try:
+            values = sorted(d.values())
+            return (
+                all(isinstance(k, str) for k in d.keys())
+                and all(isinstance(v, int) for v in d.values())
+                and values == list(range(len(values)))
+            )
+        except (ValueError, TypeError):
+            return False
 
     def _is_sequential_int_keys(self, d):
         """Check if dict keys are sequential string ints starting at '0'."""
@@ -448,8 +472,9 @@ class DatasetValidator:
             label_array = label_img.get_flattened_data()
             max_label = max(label_array) if label_array else 0
 
-        if max_label >= len(labels_dict) and max_label != 255:
-            invalid_label_values.append((case_id, max_label, len(labels_dict) - 1))
+        max_valid_label = max(labels_dict.values()) if labels_dict else 0
+        if max_label > max_valid_label and max_label != 255:
+            invalid_label_values.append((case_id, max_label, max_valid_label))
 
     def _print_case_results(self, num_cases, results):
         """Print summary of case-level validation results."""
