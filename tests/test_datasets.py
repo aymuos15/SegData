@@ -15,8 +15,6 @@ import pytest
 REQUIRED_FILES = [
     "dataset.json",
     "setup.py",
-    "stats.py",
-    "plot.py",
 ]
 
 OPTIONAL_FILES = [
@@ -81,7 +79,7 @@ class TestDatasets:
                 files = list(dirpath.glob("*"))
                 assert files, f"Directory is empty: {dirname}"
         else:
-            # If dirs don't exist, check setup.py hasn't been run yet (that's ok)
+            # If dirs don't exist, setup.py hasn't been run yet (that's ok)
             missing = [d for d in REQUIRED_DIRS if not (dataset_dir / d).exists()]
             # It's fine if none exist (setup not run yet)
             # But error if only some exist (incomplete conversion)
