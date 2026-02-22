@@ -2,7 +2,7 @@
   "name": "Cellpose 2D Cell Segmentation",
   "description": "2D cell segmentation dataset from Cellpose. Instance labels converted to binary semantic segmentation.",
   "reference": "http://cellpose.org/",
-  "citation": "Stringer, C., Wang, T., Michaelos, M. et al. Cellpose: a generalist algorithm for cellular segmentation. Nat Methods 18, 100–106 (2021). https://doi.org/10.1038/s41592-020-01018-x",
+  "citation": "Stringer, C., Wang, T., Michaelos, M. et al. Cellpose: a generalist algorithm for cellular segmentation. Nat Methods 18, 100\u2013106 (2021). https://doi.org/10.1038/s41592-020-01018-x",
   "license": "MIT",
   "release": "1.0",
   "tensorImageSize": "2D",

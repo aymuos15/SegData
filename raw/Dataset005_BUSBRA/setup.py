@@ -99,10 +99,13 @@ def convert_to_grayscale_png(img_path: Path) -> Image.Image:
 
 def binarize_mask(mask_path: Path) -> Image.Image:
     """Binarize mask to 0/255."""
+    import numpy as np
+
     mask = Image.open(mask_path)
     if mask.mode != "L":
         mask = mask.convert("L")
-    binary_array = (Image.open(mask_path).convert("L")) > 127
+    mask_array = np.array(mask, dtype=np.uint8)
+    binary_array = mask_array > 127
     return Image.fromarray((binary_array.astype(int) * 255).astype("uint8"))
 
 
