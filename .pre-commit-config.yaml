@@ -10,3 +10,4 @@ repos:
     rev: v0.0.17
     hooks:
       - id: ty-check
+        args: [--ignore, unresolved-import]

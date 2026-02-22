@@ -9,8 +9,8 @@ Run with: pytest test_datasets.py -v
 
 import json
 from pathlib import Path
-import pytest
 
+import pytest
 
 REQUIRED_FILES = [
     "dataset.json",

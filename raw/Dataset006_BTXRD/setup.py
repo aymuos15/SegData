@@ -24,16 +24,171 @@ Output:
     dataset.json   -> Updated metadata with actual case counts
 """
 
-import csv
 import json
 import shutil
 import zipfile
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
-import numpy as np
 from PIL import Image, ImageDraw
 from tqdm import tqdm
+
+
+def find_data_root(root_dir: Path) -> Optional[Path]:
+    """Find the root directory containing 'images' and 'Annotations' subdirectories."""
+    # Check if root_dir itself has both
+    if (root_dir / "images").exists() and (root_dir / "Annotations").exists():
+        return root_dir
+
+    # Search recursively for nested structure
+    for item in root_dir.rglob("*"):
+        if item.is_dir() and item.name in ("images", "Images"):
+            parent = item.parent
+            if (parent / "Annotations").exists() or (parent / "annotations").exists():
+                return parent
+
+    return None
+
+
+def find_csv_file(root_dir: Path) -> Optional[Path]:
+    """Find CSV file in the directory."""
+    for csv_file in root_dir.rglob("*.csv"):
+        return csv_file
+    return None
+
+
+def get_tumor_filenames(csv_path: Path) -> List[str]:
+    """Read CSV and extract tumor filenames (benign + malignant, exclude normal)."""
+    filenames = []
+    try:
+        with open(csv_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                # Expected format: filename,class (e.g., "image.jpg,benign")
+                parts = line.split(",")
+                if len(parts) >= 1:
+                    filename = parts[0].strip()
+                    # Filter out normal cases if class is specified
+                    if len(parts) > 1:
+                        class_label = parts[1].strip().lower()
+                        if class_label != "normal":
+                            filenames.append(filename)
+                    else:
+                        filenames.append(filename)
+    except Exception as e:
+        print(f"Warning: Error reading CSV: {e}")
+    return filenames
+
+
+def find_image_file(images_dir: Path, base_name: str) -> Optional[Path]:
+    """Find image file matching base name (handles different extensions)."""
+    for ext in [".jpg", ".jpeg", ".png", ".bmp", ".tiff"]:
+        candidate = images_dir / f"{base_name}{ext}"
+        if candidate.exists():
+            return candidate
+        # Try uppercase extensions
+        candidate = images_dir / f"{base_name}{ext.upper()}"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def rasterize_coco_annotations(
+    json_path: Path, fallback_image_path: Optional[Path] = None
+) -> Optional[Image.Image]:
+    """Rasterize COCO-style polygon annotations to binary mask."""
+    import json as json_module
+
+    try:
+        with open(json_path) as f:
+            coco_data = json_module.load(f)
+    except Exception:
+        return None
+
+    # Determine image size
+    if "images" in coco_data and len(coco_data["images"]) > 0:
+        img_info = coco_data["images"][0]
+        width = img_info.get("width", 512)
+        height = img_info.get("height", 512)
+    elif fallback_image_path is not None:
+        # Use fallback image to determine size
+        img = Image.open(fallback_image_path)
+        width, height = img.size
+    else:
+        width, height = 512, 512
+
+    # Create blank mask
+    mask = Image.new("L", (width, height), 0)
+    draw = ImageDraw.Draw(mask)
+
+    # Draw polygons from annotations
+    if "annotations" in coco_data:
+        for ann in coco_data["annotations"]:
+            if "segmentation" in ann:
+                for seg in ann["segmentation"]:
+                    if isinstance(seg, list) and len(seg) >= 6:
+                        # Convert flat list to coordinate tuples
+                        coords = [(seg[i], seg[i + 1]) for i in range(0, len(seg), 2)]
+                        draw.polygon(coords, fill=255)
+
+    return mask
+
+
+def _build_valid_pairs(
+    tumor_filenames: List[str], images_dir: Path, annotations_dir: Path
+) -> Tuple[List[Tuple[Path, Path]], int]:
+    """Build list of valid image-annotation pairs."""
+    valid_pairs: List[Tuple[Path, Path]] = []
+    skipped = 0
+
+    for fname in tumor_filenames:
+        # Extract base name (strip extension if present)
+        base = Path(fname).stem
+
+        # Find the image file
+        img_path = find_image_file(images_dir, base)
+        if img_path is None:
+            skipped += 1
+            continue
+
+        # Find the annotation JSON
+        json_path = annotations_dir / f"{base}.json"
+        if not json_path.exists():
+            skipped += 1
+            continue
+
+        valid_pairs.append((img_path, json_path))
+
+    return valid_pairs, skipped
+
+
+def _process_pairs(
+    pairs: List[Tuple[Path, Path]],
+    images_out: Path,
+    labels_out: Path,
+    offset: int = 0,
+) -> None:
+    """Process image-annotation pairs and save in nnUNet format."""
+    for idx, (img_path, json_path) in enumerate(tqdm(pairs)):
+        case_id = f"{(offset + idx):03d}"
+
+        try:
+            # Convert image to grayscale PNG
+            img = Image.open(img_path)
+            if img.mode != "L":
+                img = img.convert("L")
+            img.save(images_out / f"{case_id}_0000.png")
+
+            # Rasterize COCO annotations to binary mask
+            mask = rasterize_coco_annotations(json_path, fallback_image_path=img_path)
+            if mask is not None:
+                mask.save(labels_out / f"{case_id}.png")
+            else:
+                print(f"Warning: Could not create mask for case {case_id}")
+        except Exception as e:
+            print(f"Warning: Error processing case {case_id}: {e}")
 
 
 def setup_dataset():
@@ -85,26 +240,7 @@ def setup_dataset():
         print(f"Found {len(tumor_filenames)} tumor entries from annotation files")
 
     # Build valid image-mask pairs
-    valid_pairs: List[Tuple[Path, Path]] = []
-    skipped = 0
-
-    for fname in tumor_filenames:
-        # Extract base name (strip extension if present)
-        base = Path(fname).stem
-
-        # Find the image file
-        img_path = find_image_file(images_dir, base)
-        if img_path is None:
-            skipped += 1
-            continue
-
-        # Find the annotation JSON
-        json_path = annotations_dir / f"{base}.json"
-        if not json_path.exists():
-            skipped += 1
-            continue
-
-        valid_pairs.append((img_path, json_path))
+    valid_pairs, skipped = _build_valid_pairs(tumor_filenames, images_dir, annotations_dir)
 
     if not valid_pairs:
         print("Error: No valid image-annotation pairs found")
@@ -125,45 +261,11 @@ def setup_dataset():
 
     # Process training data
     print("Processing training data...")
-    for idx, (img_path, json_path) in enumerate(tqdm(train_pairs)):
-        case_id = f"{idx:03d}"
-
-        try:
-            # Convert image to grayscale PNG
-            img = Image.open(img_path)
-            if img.mode != "L":
-                img = img.convert("L")
-            img.save(images_tr / f"{case_id}_0000.png")
-
-            # Rasterize COCO annotations to binary mask
-            mask = rasterize_coco_annotations(json_path, fallback_image_path=img_path)
-            if mask is not None:
-                mask.save(labels_tr / f"{case_id}.png")
-            else:
-                print(f"Warning: Could not create mask for training case {case_id}")
-        except Exception as e:
-            print(f"Warning: Error processing training case {case_id}: {e}")
+    _process_pairs(train_pairs, images_tr, labels_tr, offset=0)
 
     # Process test data
     print("Processing test data...")
-    for idx, (img_path, json_path) in enumerate(tqdm(test_pairs)):
-        case_id = f"{(split_idx + idx):03d}"
-
-        try:
-            # Convert image to grayscale PNG
-            img = Image.open(img_path)
-            if img.mode != "L":
-                img = img.convert("L")
-            img.save(images_ts / f"{case_id}_0000.png")
-
-            # Rasterize COCO annotations to binary mask
-            mask = rasterize_coco_annotations(json_path, fallback_image_path=img_path)
-            if mask is not None:
-                mask.save(labels_ts / f"{case_id}.png")
-            else:
-                print(f"Warning: Could not create mask for test case {case_id}")
-        except Exception as e:
-            print(f"Warning: Error processing test case {case_id}: {e}")
+    _process_pairs(test_pairs, images_ts, labels_ts, offset=split_idx)
 
     # Cleanup temp directory
     print("Cleaning up...")

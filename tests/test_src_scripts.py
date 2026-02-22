@@ -9,8 +9,6 @@ Run with: pytest tests/test_src_scripts.py -v
 
 import sys
 from pathlib import Path
-import json
-import tempfile
 
 import pytest
 
@@ -197,6 +195,8 @@ class TestVerifyScript:
         validator._check_dataset_json()
 
         data = validator.dataset_json_data
+        assert data is not None, "dataset.json data should not be None"
+
         required_keys = {
             "name",
             "description",

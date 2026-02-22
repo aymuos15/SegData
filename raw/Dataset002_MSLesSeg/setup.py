@@ -8,12 +8,10 @@ Setup script to convert MSLesSeg dataset to nnUNet format.
 """
 
 import json
-import os
 import shutil
 import zipfile
 from pathlib import Path
 
-import nibabel as nib
 from tqdm import tqdm
 
 

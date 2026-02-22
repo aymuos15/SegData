@@ -10,6 +10,7 @@ Setup script to convert Kvasir-SEG dataset to nnUNet format.
 
 import zipfile
 from pathlib import Path
+
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
@@ -34,7 +35,7 @@ def setup_dataset():
     print("Extracting kvasir-seg.zip...")
     zip_path = dataset_dir / "kvasir-seg.zip"
     temp_dir = dataset_dir / "temp"
-    with zipfile.ZipFile(zip_path, 'r') as z:
+    with zipfile.ZipFile(zip_path, "r") as z:
         z.extractall(temp_dir)
 
     # Get image and mask directories
@@ -42,7 +43,7 @@ def setup_dataset():
     masks_dir = temp_dir / "Kvasir-SEG" / "masks"
 
     # Get sorted image files
-    image_files = sorted([f for f in images_dir.glob("*.jpg")])
+    image_files = sorted(images_dir.glob("*.jpg"))
     print(f"Found {len(image_files)} images")
 
     # Apply 80/20 split (first 800 train, last 200 test)
@@ -58,7 +59,7 @@ def setup_dataset():
         case_id = f"{idx:03d}"
 
         # Read image and save as separate channels
-        img = Image.open(img_file).convert('RGB')
+        img = Image.open(img_file).convert("RGB")
         img_array = np.array(img)
 
         # Save separate channel files (nnUNet format)
@@ -68,7 +69,7 @@ def setup_dataset():
 
         # Read and binarize mask (masks have same filename as images in masks/ directory)
         mask_file = masks_dir / (img_file.stem + ".jpg")
-        mask = np.array(Image.open(mask_file).convert('L'))
+        mask = np.array(Image.open(mask_file).convert("L"))
         mask_binary = (mask > 127).astype(np.uint8) * 255
         Image.fromarray(mask_binary).save(labels_tr / f"{case_id}.png")
 
@@ -78,7 +79,7 @@ def setup_dataset():
         case_id = f"{(split_idx + idx):03d}"
 
         # Read image and save as separate channels
-        img = Image.open(img_file).convert('RGB')
+        img = Image.open(img_file).convert("RGB")
         img_array = np.array(img)
 
         # Save separate channel files (nnUNet format)
@@ -88,17 +89,19 @@ def setup_dataset():
 
         # Read and binarize mask (masks have same filename as images in masks/ directory)
         mask_file = masks_dir / (img_file.stem + ".jpg")
-        mask = np.array(Image.open(mask_file).convert('L'))
+        mask = np.array(Image.open(mask_file).convert("L"))
         mask_binary = (mask > 127).astype(np.uint8) * 255
         Image.fromarray(mask_binary).save(labels_ts / f"{case_id}.png")
 
     # Cleanup temp directory
     print("Cleaning up...")
     import shutil
+
     shutil.rmtree(temp_dir, ignore_errors=True)
 
     # Update dataset.json
     import json
+
     dataset_json_path = dataset_dir / "dataset.json"
     # Count unique samples (images have _0000, _0001, _0002 for channels)
     train_files = sorted([f.stem.replace("_0000", "") for f in images_tr.glob("*_0000.png")])
@@ -113,18 +116,11 @@ def setup_dataset():
         "release": "1.0",
         "tensorImageSize": "2D",
         "file_ending": ".png",
-        "channel_names": {
-            "0": "red",
-            "1": "green",
-            "2": "blue"
-        },
-        "labels": {
-            "0": "background",
-            "1": "polyp"
-        },
+        "channel_names": {"0": "red", "1": "green", "2": "blue"},
+        "labels": {"0": "background", "1": "polyp"},
         "numTraining": len(train_files),
         "numTest": len(test_files),
-        "numLabels": 2
+        "numLabels": 2,
     }
 
     with open(dataset_json_path, "w") as f:

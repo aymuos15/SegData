@@ -30,7 +30,6 @@ Output:
 """
 
 import json
-import re
 from pathlib import Path
 
 import nibabel as nib
@@ -40,7 +39,7 @@ from tqdm import tqdm
 
 def extract_subject_id(subject_dir):
     """Extract numeric ID from sub-XXXX directory name."""
-    return int(subject_dir.name.split('-')[1])
+    return int(subject_dir.name.split("-")[1])
 
 
 def setup_dataset():

@@ -16,8 +16,8 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import matplotlib.pyplot as plt
 import nibabel as nib
 import numpy as np
 from PIL import Image
@@ -51,7 +51,9 @@ def list_case_ids(dataset_dir: Path, file_ending: str, split: str) -> List[str]:
         return [f.name.replace(f"_0000{file_ending}", "") for f in files]
 
 
-def load_image_2d(dataset_dir: Path, case_id: str, split: str, channel: int, file_ending: str) -> np.ndarray:
+def load_image_2d(
+    dataset_dir: Path, case_id: str, split: str, channel: int, file_ending: str
+) -> np.ndarray:
     """Load a single 2D image channel."""
     split_dirs = {
         "train": ("imagesTr", "labelsTr"),
@@ -90,9 +92,9 @@ def get_mid_slices(volume: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarr
     mid_h = h // 2
     mid_w = w // 2
 
-    axial = volume[mid_d, :, :]    # Z plane
+    axial = volume[mid_d, :, :]  # Z plane
     coronal = volume[:, mid_h, :]  # Y plane
-    sagittal = volume[:, :, mid_w] # X plane
+    sagittal = volume[:, :, mid_w]  # X plane
 
     return axial, coronal, sagittal
 
@@ -109,7 +111,6 @@ def plot_case_2d(dataset_dir: Path, meta: Dict, case_id: str, split: str):
     """Plot 2D image(s) with label."""
     file_ending = meta["file_ending"]
     channel_names = meta.get("channel_names", {})
-    labels = meta.get("labels", {})
     n_channels = len(channel_names)
 
     # Load label
@@ -149,7 +150,9 @@ def plot_case_2d(dataset_dir: Path, meta: Dict, case_id: str, split: str):
 
     else:
         # Multi-channel: 1×(n+1) layout
-        channels = [load_image_2d(dataset_dir, case_id, split, ch, file_ending) for ch in range(n_channels)]
+        channels = [
+            load_image_2d(dataset_dir, case_id, split, ch, file_ending) for ch in range(n_channels)
+        ]
         fig, axes = plt.subplots(1, n_channels + 1, figsize=(4 * (n_channels + 1), 4))
 
         for ch in range(n_channels):
@@ -166,13 +169,32 @@ def plot_case_2d(dataset_dir: Path, meta: Dict, case_id: str, split: str):
     plt.show()
 
 
+def plot_labeled_slice(ax, img_norm: np.ndarray, label_slice: np.ndarray, num_labels: int) -> None:
+    """Plot image with label overlay on a single axis."""
+    ax.imshow(img_norm, cmap="gray")
+
+    if num_labels == 2:
+        # Binary: simple overlay
+        mask = label_slice > 0
+        ax.contourf(mask.astype(float), levels=[0.5, 1.5], colors=["red"], alpha=0.5)
+    else:
+        # Multi-class: use tab10 colormap
+        from matplotlib.cm import get_cmap
+
+        cmap = get_cmap("tab10")
+        for label_class in range(1, num_labels):
+            mask = label_slice == label_class
+            if np.any(mask):
+                color = cmap(label_class % 10)
+                ax.contourf(mask.astype(float), levels=[0.5, 1.5], colors=[color], alpha=0.6)
+
+
 def plot_case_3d(dataset_dir: Path, meta: Dict, case_id: str, split: str, plane: str = "all"):
     """Plot 3D volume mid-slices with label."""
     file_ending = meta["file_ending"]
     channel_names = meta.get("channel_names", {})
     labels = meta.get("labels", {})
     num_labels = meta.get("numLabels", 2)
-    n_channels = len(channel_names)
 
     split_dirs = {
         "train": ("imagesTr", "labelsTr"),
@@ -217,29 +239,16 @@ def plot_case_3d(dataset_dir: Path, meta: Dict, case_id: str, split: str, plane:
             axes[row, 0].axis("off")
 
             # Right: image + label overlay
-            axes[row, 1].imshow(img_norm, cmap="gray")
-
-            if num_labels == 2:
-                # Binary: simple overlay
-                mask = label_slice > 0
-                axes[row, 1].contourf(mask.astype(float), levels=[0.5, 1.5], colors=["red"], alpha=0.5)
-            else:
-                # Multi-class: use tab10 colormap
-                from matplotlib.cm import get_cmap
-                cmap = get_cmap("tab10")
-                for label_class in range(1, num_labels):
-                    mask = label_slice == label_class
-                    if np.any(mask):
-                        color = cmap(label_class % 10)
-                        axes[row, 1].contourf(mask.astype(float), levels=[0.5, 1.5], colors=[color], alpha=0.6)
-
+            plot_labeled_slice(axes[row, 1], img_norm, label_slice, num_labels)
             axes[row, 1].set_title(f"{channel_str} + Labels ({plane_name})")
             axes[row, 1].axis("off")
 
         # Add legend
         if num_labels > 2:
             handles = [
-                patches.Patch(facecolor=plt.cm.tab10(i % 10), label=labels.get(str(i), f"Class {i}"))
+                patches.Patch(
+                    facecolor=plt.cm.tab10(i % 10), label=labels.get(str(i), f"Class {i}")
+                )
                 for i in range(1, num_labels)
             ]
             axes[0, 1].legend(handles=handles, loc="upper right", fontsize=8)
@@ -252,34 +261,27 @@ def plot_case_3d(dataset_dir: Path, meta: Dict, case_id: str, split: str, plane:
         img_norm = normalize_image(img_slice)
 
         fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        fig.suptitle(f"{split_name} Case {case_id} - {channel_str} {plane.capitalize()} Plane",
-                     fontsize=14, fontweight="bold")
+        fig.suptitle(
+            f"{split_name} Case {case_id} - {channel_str} {plane.capitalize()} Plane",
+            fontsize=14,
+            fontweight="bold",
+        )
 
         axes[0].imshow(img_norm, cmap="gray")
         axes[0].set_title(channel_str)
         axes[0].axis("off")
 
-        axes[1].imshow(img_norm, cmap="gray")
-
-        if num_labels == 2:
-            mask = label_slice > 0
-            axes[1].contourf(mask.astype(float), levels=[0.5, 1.5], colors=["red"], alpha=0.5)
-        else:
-            from matplotlib.cm import get_cmap
-            cmap = get_cmap("tab10")
-            for label_class in range(1, num_labels):
-                mask = label_slice == label_class
-                if np.any(mask):
-                    color = cmap(label_class % 10)
-                    axes[1].contourf(mask.astype(float), levels=[0.5, 1.5], colors=[color], alpha=0.6)
-
+        # Right: image + label overlay
+        plot_labeled_slice(axes[1], img_norm, label_slice, num_labels)
         axes[1].set_title(f"{channel_str} + Labels")
         axes[1].axis("off")
 
         # Add legend
         if num_labels > 2:
             handles = [
-                patches.Patch(facecolor=plt.cm.tab10(i % 10), label=labels.get(str(i), f"Class {i}"))
+                patches.Patch(
+                    facecolor=plt.cm.tab10(i % 10), label=labels.get(str(i), f"Class {i}")
+                )
                 for i in range(1, num_labels)
             ]
             axes[1].legend(handles=handles, loc="upper right", fontsize=8)
@@ -346,6 +348,7 @@ def main():
     except Exception as e:
         print(f"Error plotting case: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

@@ -8,6 +8,7 @@ Setup script to convert Cellpose dataset to nnUNet format.
 
 import zipfile
 from pathlib import Path
+
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
@@ -30,23 +31,23 @@ def setup_dataset():
 
     # Extract zips
     print("Extracting zip files...")
-    with zipfile.ZipFile(dataset_dir / "train.zip", 'r') as z:
+    with zipfile.ZipFile(dataset_dir / "train.zip", "r") as z:
         z.extractall(dataset_dir / "temp_train")
 
-    with zipfile.ZipFile(dataset_dir / "test.zip", 'r') as z:
+    with zipfile.ZipFile(dataset_dir / "test.zip", "r") as z:
         z.extractall(dataset_dir / "temp_test")
 
     # Process training data
     print("Processing training data...")
     train_dir = dataset_dir / "temp_train" / "train"
-    img_files = sorted([f for f in train_dir.glob("*_img.png")])
+    img_files = sorted(train_dir.glob("*_img.png"))
 
     for img_file in tqdm(img_files):
         sample_id = img_file.stem.replace("_img", "")
         mask_file = img_file.parent / f"{sample_id}_masks.png"
 
         # Read image and split into separate channel files
-        img = Image.open(img_file).convert('RGB')
+        img = Image.open(img_file).convert("RGB")
         img_array = np.array(img)
 
         # Save separate channel files (nnUNet format)
@@ -62,14 +63,14 @@ def setup_dataset():
     # Process test data
     print("Processing test data...")
     test_dir = dataset_dir / "temp_test" / "test"
-    img_files = sorted([f for f in test_dir.glob("*_img.png")])
+    img_files = sorted(test_dir.glob("*_img.png"))
 
     for img_file in tqdm(img_files):
         sample_id = img_file.stem.replace("_img", "")
         mask_file = img_file.parent / f"{sample_id}_masks.png"
 
         # Read image and split into separate channel files
-        img = Image.open(img_file).convert('RGB')
+        img = Image.open(img_file).convert("RGB")
         img_array = np.array(img)
 
         # Save separate channel files (nnUNet format)
@@ -85,11 +86,13 @@ def setup_dataset():
     # Cleanup temp directories
     print("Cleaning up...")
     import shutil
+
     for temp_dir in [dataset_dir / "temp_train", dataset_dir / "temp_test"]:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
     # Update dataset.json
     import json
+
     dataset_json_path = dataset_dir / "dataset.json"
     # Count unique samples (images have _0000, _0001, _0002 for channels)
     train_files = sorted([f.stem.replace("_0000", "") for f in images_tr.glob("*_0000.png")])
@@ -104,18 +107,11 @@ def setup_dataset():
         "release": "1.0",
         "tensorImageSize": "2D",
         "file_ending": ".png",
-        "channel_names": {
-            "0": "red",
-            "1": "green",
-            "2": "blue"
-        },
-        "labels": {
-            "0": "background",
-            "1": "cell"
-        },
+        "channel_names": {"0": "red", "1": "green", "2": "blue"},
+        "labels": {"0": "background", "1": "cell"},
         "numTraining": len(train_files),
         "numTest": len(test_files),
-        "numLabels": 2
+        "numLabels": 2,
     }
 
     with open(dataset_json_path, "w") as f:

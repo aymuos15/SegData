@@ -32,11 +32,78 @@ import json
 import shutil
 import zipfile
 from pathlib import Path
-from typing import List, Tuple, Optional
 
-import numpy as np
 from PIL import Image
 from tqdm import tqdm
+
+
+def discover_images_and_masks(root_dir: Path) -> list[tuple[Path, Path]]:
+    """
+    Discover all image-mask pairs recursively.
+
+    Strategies:
+    1. Same name with '_mask' suffix
+    2. Parallel 'masks/' or 'Mask/' directory with same filename
+    3. Sibling 'Mask' subdirectory
+    """
+    image_extensions = {".bmp", ".jpg", ".jpeg", ".png", ".tiff"}
+    pairs = []
+
+    # Find all image files (excluding files with 'mask' in name)
+    for img_path in root_dir.rglob("*"):
+        if img_path.suffix.lower() not in image_extensions:
+            continue
+        if "mask" in img_path.name.lower():
+            continue
+
+        # Try to find corresponding mask
+        mask_path = _find_mask_for_image(img_path)
+        if mask_path is not None:
+            pairs.append((img_path, mask_path))
+
+    return pairs
+
+
+def _find_mask_for_image(img_path: Path) -> Path | None:
+    """Find mask file for a given image."""
+    base_name = img_path.stem
+
+    # Strategy 1: Same directory, '_mask' suffix
+    candidate = img_path.parent / f"{base_name}_mask{img_path.suffix}"
+    if candidate.exists():
+        return candidate
+
+    # Strategy 2: Parallel 'masks/' or 'Mask/' directory
+    for mask_dir_name in ["masks", "Masks", "mask", "Mask"]:
+        mask_dir = img_path.parent.parent / mask_dir_name
+        candidate = mask_dir / img_path.name
+        if candidate.exists():
+            return candidate
+
+    # Strategy 3: Sibling 'Mask' subdirectory
+    mask_dir = img_path.parent / "Mask"
+    candidate = mask_dir / img_path.name
+    if candidate.exists():
+        return candidate
+
+    return None
+
+
+def convert_to_grayscale_png(img_path: Path) -> Image.Image:
+    """Convert image to grayscale PNG."""
+    img = Image.open(img_path)
+    if img.mode != "L":
+        img = img.convert("L")
+    return img
+
+
+def binarize_mask(mask_path: Path) -> Image.Image:
+    """Binarize mask to 0/255."""
+    mask = Image.open(mask_path)
+    if mask.mode != "L":
+        mask = mask.convert("L")
+    binary_array = (Image.open(mask_path).convert("L")) > 127
+    return Image.fromarray((binary_array.astype(int) * 255).astype("uint8"))
 
 
 def setup_dataset():
@@ -62,7 +129,7 @@ def setup_dataset():
     temp_dir = dataset_dir / "temp_extract"
     shutil.rmtree(temp_dir, ignore_errors=True)
 
-    with zipfile.ZipFile(zip_path, 'r') as z:
+    with zipfile.ZipFile(zip_path, "r") as z:
         z.extractall(temp_dir)
 
     # Discover images and masks
