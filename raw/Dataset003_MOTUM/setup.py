@@ -40,23 +40,7 @@ from tqdm import tqdm
 
 def extract_subject_id(subject_dir):
     """Extract numeric ID from sub-XXXX directory name."""
-    match = re.match(r"sub-(\d+)", subject_dir.name)
-    if match:
-        return int(match.group(1))
-    return 0
-
-
-def find_matching_file(directory, patterns):
-    """Find first file matching any pattern (case-insensitive)."""
-    if not directory.exists():
-        return None
-    for item in directory.iterdir():
-        if item.is_file():
-            lower_name = item.name.lower()
-            for pattern in patterns:
-                if pattern.lower() in lower_name:
-                    return item
-    return None
+    return int(subject_dir.name.split('-')[1])
 
 
 def setup_dataset():
@@ -80,10 +64,6 @@ def setup_dataset():
         [d for d in dataset_dir.iterdir() if d.is_dir() and d.name.startswith("sub-")],
         key=extract_subject_id,
     )
-
-    if not subject_dirs:
-        print("Error: No subject directories (sub-XXXX) found")
-        return
 
     print(f"Found {len(subject_dirs)} subject directories")
 
@@ -126,12 +106,12 @@ def setup_dataset():
     print(f"  - Test cases: {len(test_subjects)}")
     print(f"  - Test images: {len(list(images_ts.glob('*_0000.nii.gz')))} cases × 4 channels")
     print(f"  - Test labels: {len(list(labels_ts.glob('*.nii.gz')))} merged masks")
-    print(f"  - dataset.json updated")
+    print("  - dataset.json updated")
 
 
 def process_subject(dataset_dir, subject_dir, case_id, images_dir, labels_dir):
     """
-    Process a single BIDS subject: find 4 MRI channels and merge two label files.
+    Process a single BIDS subject: extract 4 MRI channels and merge two label files.
 
     Image locations: subject_dir/anat/{subject}_{modality}.nii.gz
     Label locations: dataset_dir/derivatives/{subject}/
@@ -139,89 +119,43 @@ def process_subject(dataset_dir, subject_dir, case_id, images_dir, labels_dir):
     Channels: FLAIR, T1, T2, T1ce (saved as _0000, _0001, _0002, _0003)
     Labels: Merge flair_seg_label1 and t1ce_seg_label2 into 3-class mask
     """
+    import shutil
 
     anat_dir = subject_dir / "anat"
     deriv_dir = dataset_dir / "derivatives" / subject_dir.name
 
-    if not anat_dir.exists():
-        print(f"Warning: anat directory not found for {subject_dir.name}")
-        return
-
-    # Find 4 MRI channel files in anat/
-    flair_file = find_matching_file(anat_dir, ["flair"])
-    t1_file = find_matching_file(anat_dir, ["_t1.nii", "t1_"])
-    t2_file = find_matching_file(anat_dir, ["_t2.nii", "t2_"])
-    t1ce_file = find_matching_file(anat_dir, ["t1ce"])
-
-    # Check for required channels
-    if not flair_file:
-        print(f"Warning: FLAIR not found in {anat_dir}")
-        return
-
-    # FLAIR is required; others expected in MOTUM
-    channels = [flair_file, t1_file, t2_file, t1ce_file]
-    if any(ch is None for ch in channels):
-        print(f"Warning: Not all 4 channels found in {subject_dir.name}")
-        return
+    # Hardcode channel filenames
+    subject_name = subject_dir.name
+    channels = [
+        anat_dir / f"{subject_name}_flair.nii.gz",
+        anat_dir / f"{subject_name}_t1.nii.gz",
+        anat_dir / f"{subject_name}_t2.nii.gz",
+        anat_dir / f"{subject_name}_t1ce.nii.gz",
+    ]
 
     # Copy 4 channels to nnUNet format
-    try:
-        import shutil
-        for ch_idx, channel_file in enumerate(channels):
-            if channel_file:
-                shutil.copy(channel_file, images_dir / f"{case_id}_{ch_idx:04d}.nii.gz")
-    except Exception as e:
-        print(f"Error copying image channels for case {case_id}: {e}")
-        return
+    for ch_idx, channel_file in enumerate(channels):
+        shutil.copy(channel_file, images_dir / f"{case_id}_{ch_idx:04d}.nii.gz")
 
-    # Find and merge two label files in derivatives/
-    if not deriv_dir.exists():
-        print(f"Warning: derivatives directory not found for {subject_dir.name}")
-        return
+    # Hardcode label filenames
+    label1_file = deriv_dir / "flair_seg_label1.nii.gz"
+    label2_file = deriv_dir / "t1ce_seg_label2.nii.gz"
 
-    label1_file = find_matching_file(deriv_dir, ["flair_seg_label1"])
-    label2_file = find_matching_file(deriv_dir, ["t1ce_seg_label2"])
+    # Load labels (both available case)
+    label1_nib = nib.load(label1_file)
+    label1 = np.array(label1_nib.get_fdata(), dtype=np.uint8)
 
-    if not label1_file and not label2_file:
-        print(f"Warning: No segmentation labels found in {deriv_dir}")
-        return
+    label2_nib = nib.load(label2_file)
+    label2 = np.array(label2_nib.get_fdata(), dtype=np.uint8)
 
-    # Load labels
-    try:
-        if label1_file:
-            label1_nib = nib.load(label1_file)
-            label1 = np.array(label1_nib.get_fdata(), dtype=np.uint8)
-        else:
-            label1 = None
+    # Merge labels: 0=bg, 1=FLAIR-only, 2=T1ce-enhancing
+    label_merged = np.zeros_like(label1)
+    label_merged[label1 == 1] = 1
+    label_merged[label2 == 1] = 2  # Overwrites in overlap
+    merged_nib = nib.Nifti1Image(label_merged, label1_nib.affine, label1_nib.header)
 
-        if label2_file:
-            label2_nib = nib.load(label2_file)
-            label2 = np.array(label2_nib.get_fdata(), dtype=np.uint8)
-        else:
-            label2 = None
-
-        # Merge labels: 0=bg, 1=FLAIR-only, 2=T1ce-enhancing
-        if label1 is not None and label2 is not None:
-            # Both available: merge with priority to label2 (T1ce)
-            label_merged = np.zeros_like(label1)
-            label_merged[label1 == 1] = 1
-            label_merged[label2 == 1] = 2  # Overwrites in overlap
-            merged_nib = nib.Nifti1Image(label_merged, label1_nib.affine, label1_nib.header)
-        elif label1 is not None:
-            # Only FLAIR available
-            label_merged = np.where(label1 > 0, 1, 0).astype(np.uint8)
-            merged_nib = nib.Nifti1Image(label_merged, label1_nib.affine, label1_nib.header)
-        else:
-            # Only T1ce available
-            label_merged = np.where(label2 > 0, 2, 0).astype(np.uint8)
-            merged_nib = nib.Nifti1Image(label_merged, label2_nib.affine, label2_nib.header)
-
-        # Save merged label
-        nib.save(merged_nib, labels_dir / f"{case_id}.nii.gz")
-
-    except Exception as e:
-        print(f"Error processing labels for case {case_id}: {e}")
-        return
+    # Save merged label
+    nib.save(merged_nib, labels_dir / f"{case_id}.nii.gz")
 
 
 if __name__ == "__main__":

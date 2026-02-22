@@ -8,7 +8,6 @@ Usage:
     python plot.py 000 --channel 1  # Show specific channel
 """
 
-import argparse
 from pathlib import Path
 import numpy as np
 from PIL import Image
@@ -18,14 +17,13 @@ import matplotlib.pyplot as plt
 def load_image(case_id: str, split: str = "train", channel: int = 0) -> np.ndarray:
     """Load a specific channel from an image."""
     dataset_dir = Path(__file__).parent
-    if split == "train":
-        images_dir = dataset_dir / "imagesTr"
-    else:
-        images_dir = dataset_dir / "imagesTs"
+    images_dir_map = {
+            "train": dataset_dir / "...",
+            "test": dataset_dir / "...",
+        }
+        images_dir = images_dir_map[split]
 
     img_file = images_dir / f"{case_id}_{channel:04d}.png"
-    if not img_file.exists():
-        raise FileNotFoundError(f"Image not found: {img_file}")
 
     return np.array(Image.open(img_file))
 
@@ -33,14 +31,13 @@ def load_image(case_id: str, split: str = "train", channel: int = 0) -> np.ndarr
 def load_label(case_id: str, split: str = "train") -> np.ndarray:
     """Load label (polyp mask) for a case."""
     dataset_dir = Path(__file__).parent
-    if split == "train":
-        labels_dir = dataset_dir / "labelsTr"
-    else:
-        labels_dir = dataset_dir / "labelsTs"
+    labels_dir_map = {
+            "train": dataset_dir / "...",
+            "test": dataset_dir / "...",
+        }
+        labels_dir = labels_dir_map[split]
 
     label_file = labels_dir / f"{case_id}.png"
-    if not label_file.exists():
-        raise FileNotFoundError(f"Label not found: {label_file}")
 
     return np.array(Image.open(label_file))
 
@@ -91,7 +88,7 @@ def plot_case(case_id: str, split: str = "train", channel: int = None):
         img_normalized = img.astype(float) / 255.0
         axes[0].imshow(img_normalized)
     axes[0].set_title(f"Endoscopy Image {case_id}{title_suffix}")
-    axes[0].axis("off")
+    axes[0].axis("of")
 
     # Plot label
     axes[1].imshow(label, cmap="gray")
@@ -99,7 +96,8 @@ def plot_case(case_id: str, split: str = "train", channel: int = None):
     axes[1].axis("off")
 
     # Overall title
-    split_name = "Training" if split == "train" else "Test"
+    split_name_map = {"train": "Training", "test": "Test"}
+    split_name = split_name_map[split]
     fig.suptitle(f"{split_name} Case: {case_id}", fontsize=14, fontweight="bold")
 
     plt.tight_layout()
@@ -107,35 +105,15 @@ def plot_case(case_id: str, split: str = "train", channel: int = None):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Visualize Kvasir-SEG images and polyp segmentation masks"
-    )
-    parser.add_argument(
-        "case_id",
-        help="Case ID to visualize (e.g., 000, 001, 042)",
-    )
-    parser.add_argument(
-        "--test",
-        action="store_true",
-        help="Use test set (default: training set)",
-    )
-    parser.add_argument(
-        "--channel",
-        type=int,
-        default=None,
-        help="Specific channel to display (default: RGB from all 3 channels)",
-    )
-
-    args = parser.parse_args()
-
-    split = "test" if args.test else "train"
-
-    try:
-        plot_case(args.case_id, split, args.channel)
-    except FileNotFoundError as e:
-        print(f"Error: {e}")
-        exit(1)
-
+    case_id = input("Enter case_id: ").strip()
+    test = input("Use test set? (y/n): ").lower() == 'y'
+    plane = input("Plane (all/axial/coronal/sagittal) [all]: ").strip() or "all"
+    channel_str = input("Channel(s) (comma-separated, e.g. 0 or 0,1,2) [0]: ").strip() or "0"
+    
+    split = {True: "test", False: "train"}[test]
+    channels = [int(c.strip()) for c in channel_str.split(",")]
+    
+    plot_case(case_id, split, plane, channels)
 
 if __name__ == "__main__":
     main()

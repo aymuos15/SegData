@@ -16,7 +16,6 @@ Usage:
     python stats.py --output-dir results
 """
 
-import argparse
 import json
 from pathlib import Path
 from typing import Dict, List
@@ -97,22 +96,21 @@ class DatasetAnalyzer:
         return {
             "num_tumors": int(num_components),
             "tumor_sizes_pixels": component_sizes.tolist(),
-            "mean_tumor_size": float(np.mean(component_sizes)) if len(component_sizes) > 0 else 0.0,
-            "median_tumor_size": float(np.median(component_sizes)) if len(component_sizes) > 0 else 0.0,
-            "min_tumor_size": int(np.min(component_sizes)) if len(component_sizes) > 0 else 0,
-            "max_tumor_size": int(np.max(component_sizes)) if len(component_sizes) > 0 else 0,
-            "std_tumor_size": float(np.std(component_sizes)) if len(component_sizes) > 0 else 0.0,
+            "mean_tumor_size": float(np.mean(component_sizes)),
+            "median_tumor_size": float(np.median(component_sizes)),
+            "min_tumor_size": int(np.min(component_sizes)),
+            "max_tumor_size": int(np.max(component_sizes)),
+            "std_tumor_size": float(np.std(component_sizes)),
             "total_tumor_pixels": int(np.sum(component_sizes)),
         }
 
-    def analyze_split(self, split: str, output_dir: Path | None = None) -> Dict:
+    def analyze_split(self, split: str, output_dir: Path) -> Dict:
         """Analyze training or test split."""
-        if split == "train":
-            images_dir = self.images_tr
-            labels_dir = self.labels_tr
-        else:
-            images_dir = self.images_ts
-            labels_dir = self.labels_ts
+        split_dirs = {
+            "train": (self.images_tr, self.labels_tr),
+            "test": (self.images_ts, self.labels_ts),
+        }
+        images_dir, labels_dir = split_dirs[split]
 
         # Get unique sample IDs
         image_files = sorted(images_dir.glob("*_0000.png"))
@@ -135,10 +133,6 @@ class DatasetAnalyzer:
         for sample_id in tqdm(sample_ids, desc=f"Analyzing {split} split", unit="sample"):
             # Read label
             label_file = labels_dir / f"{sample_id}.png"
-            if not label_file.exists():
-                print(f"Warning: Missing label for {sample_id}")
-                continue
-
             label_img = Image.open(label_file)
             label_array = np.array(label_img) > 0  # Binarize
 
@@ -146,7 +140,6 @@ class DatasetAnalyzer:
             tumor_stats = self.count_tumors(label_array)
 
             # Save individual case JSON
-            if output_dir:
                 case_output = {
                     "case_id": sample_id,
                     "split": split,
@@ -186,7 +179,7 @@ class DatasetAnalyzer:
 
 def analyze_dataset(
     dataset_dir: str,
-    output_dir: str | None = None,
+    output_dir: str,
 ) -> Dict:
     """Analyze complete dataset."""
     analyzer = DatasetAnalyzer(dataset_dir)
@@ -195,10 +188,8 @@ def analyze_dataset(
     sample_counts = analyzer.count_samples()
 
     # Create output directory if specified
-    output_path = None
-    if output_dir:
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
 
     # Analyze each split
     train_analysis = analyzer.analyze_split("train", output_path)
@@ -215,7 +206,6 @@ def analyze_dataset(
     }
 
     # Save aggregate stats
-    if output_path:
         aggregate_json = output_path / "aggregate_stats.json"
         with open(aggregate_json, "w") as f:
             json.dump(output, f, indent=2)
@@ -237,7 +227,6 @@ def print_summary(output: Dict) -> None:
     print(f"Total samples: {counts['total']}")
 
     # Training split
-    if output["train"]["num_samples"] > 0:
         print("\n" + "=" * 80)
         print("TRAINING SPLIT")
         print("=" * 80)
@@ -245,19 +234,19 @@ def print_summary(output: Dict) -> None:
         dims = train_data["image_dims"]
         agg = train_data["aggregate"]
 
-        print(f"\nImage Dimensions:")
+        print("\nImage Dimensions:")
         print(f"  Mean: {dims['mean_height']:.1f} x {dims['mean_width']:.1f} pixels")
         print(f"  Range: {dims['min_height']}-{dims['max_height']} x {dims['min_width']}-{dims['max_width']} pixels")
         print(f"  Std Dev: +/-{dims['std_height']:.1f} x +/-{dims['std_width']:.1f} pixels")
 
-        print(f"\nTumor Statistics:")
+        print("\nTumor Statistics:")
         print(f"  Avg tumors per image: {agg['mean_tumors_per_image']:.2f}")
         print(f"  Median tumors per image: {agg['median_tumors_per_image']:.0f}")
         print(f"  Tumor count range: {agg['min_tumors']}-{agg['max_tumors']}")
         print(f"  Total tumors: {agg['total_tumors_all_samples']}")
 
         tumor_stats = agg["tumor_size_stats"]
-        print(f"\nTumor Sizes:")
+        print("\nTumor Sizes:")
         print(f"  Total components: {tumor_stats['total_tumors']}")
         print(f"  Mean: {tumor_stats['mean_pixels']:.2f} pixels")
         print(f"  Median: {tumor_stats['median_pixels']:.2f} pixels")
@@ -265,7 +254,6 @@ def print_summary(output: Dict) -> None:
         print(f"  Std Dev: {tumor_stats['std_pixels']:.2f} pixels")
 
     # Test split
-    if output["test"]["num_samples"] > 0:
         print("\n" + "=" * 80)
         print("TEST SPLIT")
         print("=" * 80)
@@ -273,19 +261,19 @@ def print_summary(output: Dict) -> None:
         dims = test_data["image_dims"]
         agg = test_data["aggregate"]
 
-        print(f"\nImage Dimensions:")
+        print("\nImage Dimensions:")
         print(f"  Mean: {dims['mean_height']:.1f} x {dims['mean_width']:.1f} pixels")
         print(f"  Range: {dims['min_height']}-{dims['max_height']} x {dims['min_width']}-{dims['max_width']} pixels")
         print(f"  Std Dev: +/-{dims['std_height']:.1f} x +/-{dims['std_width']:.1f} pixels")
 
-        print(f"\nTumor Statistics:")
+        print("\nTumor Statistics:")
         print(f"  Avg tumors per image: {agg['mean_tumors_per_image']:.2f}")
         print(f"  Median tumors per image: {agg['median_tumors_per_image']:.0f}")
         print(f"  Tumor count range: {agg['min_tumors']}-{agg['max_tumors']}")
         print(f"  Total tumors: {agg['total_tumors_all_samples']}")
 
         tumor_stats = agg["tumor_size_stats"]
-        print(f"\nTumor Sizes:")
+        print("\nTumor Sizes:")
         print(f"  Total components: {tumor_stats['total_tumors']}")
         print(f"  Mean: {tumor_stats['mean_pixels']:.2f} pixels")
         print(f"  Median: {tumor_stats['median_pixels']:.2f} pixels")
@@ -294,36 +282,15 @@ def print_summary(output: Dict) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Analyze BTXRD dataset statistics and tumor counts"
-    )
-    parser.add_argument(
-        "--dataset-dir",
-        default=str(Path(__file__).parent),
-        help="Path to dataset directory",
-    )
-    parser.add_argument(
-        "--output-dir",
-        default="results",
-        help="Directory to save JSON results (one per case)",
-    )
-    parser.add_argument(
-        "--no-save",
-        action="store_true",
-        help="Don't save JSON output",
-    )
-
-    args = parser.parse_args()
-
-    output_dir = None if args.no_save else args.output_dir
-
+    dataset_dir = str(Path(__file__).parent)
+    output_dir = "results"
+    
     output = analyze_dataset(
-        dataset_dir=args.dataset_dir,
+        dataset_dir=dataset_dir,
         output_dir=output_dir,
     )
-
+    
     print_summary(output)
-
 
 if __name__ == "__main__":
     main()

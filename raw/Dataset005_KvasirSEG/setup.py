@@ -33,22 +33,13 @@ def setup_dataset():
     # Extract zip
     print("Extracting kvasir-seg.zip...")
     zip_path = dataset_dir / "kvasir-seg.zip"
-    if not zip_path.exists():
-        print(f"Error: {zip_path} not found")
-        return
-
     temp_dir = dataset_dir / "temp"
     with zipfile.ZipFile(zip_path, 'r') as z:
         z.extractall(temp_dir)
 
-    # Discover images and masks
-    print("Discovering images and masks...")
+    # Get image and mask directories
     images_dir = temp_dir / "Kvasir-SEG" / "images"
     masks_dir = temp_dir / "Kvasir-SEG" / "masks"
-
-    if not images_dir.exists():
-        print(f"Error: {images_dir} not found")
-        return
 
     # Get sorted image files
     image_files = sorted([f for f in images_dir.glob("*.jpg")])
@@ -77,13 +68,9 @@ def setup_dataset():
 
         # Read and binarize mask (masks have same filename as images in masks/ directory)
         mask_file = masks_dir / (img_file.stem + ".jpg")
-
-        if mask_file.exists():
-            mask = np.array(Image.open(mask_file).convert('L'))
-            mask_binary = (mask > 127).astype(np.uint8) * 255
-            Image.fromarray(mask_binary).save(labels_tr / f"{case_id}.png")
-        else:
-            print(f"Warning: Missing mask for {img_file.name}")
+        mask = np.array(Image.open(mask_file).convert('L'))
+        mask_binary = (mask > 127).astype(np.uint8) * 255
+        Image.fromarray(mask_binary).save(labels_tr / f"{case_id}.png")
 
     # Process test data
     print("Processing test data...")
@@ -101,19 +88,14 @@ def setup_dataset():
 
         # Read and binarize mask (masks have same filename as images in masks/ directory)
         mask_file = masks_dir / (img_file.stem + ".jpg")
-
-        if mask_file.exists():
-            mask = np.array(Image.open(mask_file).convert('L'))
-            mask_binary = (mask > 127).astype(np.uint8) * 255
-            Image.fromarray(mask_binary).save(labels_ts / f"{case_id}.png")
-        else:
-            print(f"Warning: Missing mask for {img_file.name}")
+        mask = np.array(Image.open(mask_file).convert('L'))
+        mask_binary = (mask > 127).astype(np.uint8) * 255
+        Image.fromarray(mask_binary).save(labels_ts / f"{case_id}.png")
 
     # Cleanup temp directory
     print("Cleaning up...")
     import shutil
-    if temp_dir.exists():
-        shutil.rmtree(temp_dir)
+    shutil.rmtree(temp_dir, ignore_errors=True)
 
     # Update dataset.json
     import json
@@ -153,7 +135,7 @@ def setup_dataset():
     print(f"  - Training labels: {len(list(labels_tr.glob('*.png')))} files")
     print(f"  - Test images: {len(test_files)} files")
     print(f"  - Test labels: {len(list(labels_ts.glob('*.png')))} files")
-    print(f"  - dataset.json updated")
+    print("  - dataset.json updated")
 
 
 if __name__ == "__main__":

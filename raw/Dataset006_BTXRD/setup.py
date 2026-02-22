@@ -36,135 +36,6 @@ from PIL import Image, ImageDraw
 from tqdm import tqdm
 
 
-def find_data_root(temp_dir: Path) -> Optional[Path]:
-    """Find the root directory containing 'images/' and 'Annotations/' folders.
-
-    Handles both flat extraction and nested directory structures.
-    """
-    # Check temp_dir itself
-    if (temp_dir / "images").exists() and (temp_dir / "Annotations").exists():
-        return temp_dir
-
-    # Check one level of nesting
-    for child in temp_dir.iterdir():
-        if child.is_dir():
-            if (child / "images").exists() and (child / "Annotations").exists():
-                return child
-
-    return None
-
-
-def find_csv_file(data_root: Path) -> Optional[Path]:
-    """Find the dataset CSV file."""
-    for name in ["dataset.csv", "Dataset.csv"]:
-        csv_path = data_root / name
-        if csv_path.exists():
-            return csv_path
-    # Search one level up in case CSV is at zip root
-    for name in ["dataset.csv", "Dataset.csv"]:
-        csv_path = data_root.parent / name
-        if csv_path.exists():
-            return csv_path
-    return None
-
-
-def get_tumor_filenames(csv_path: Path) -> List[str]:
-    """Read CSV and return filenames of non-normal images.
-
-    Dynamically discovers the filename and label columns.
-    """
-    with open(csv_path, "r", newline="") as f:
-        reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames
-        if not fieldnames:
-            raise ValueError(f"CSV file {csv_path} has no header row")
-
-        # Find filename column
-        filename_col = None
-        for candidate in ["file_name", "filename", "image_name", "ID", "File_name", "FileName"]:
-            if candidate in fieldnames:
-                filename_col = candidate
-                break
-        if filename_col is None:
-            raise ValueError(
-                f"Could not find filename column in CSV. Columns: {fieldnames}"
-            )
-
-        # Find label column
-        label_col = None
-        for candidate in ["Label", "label", "class", "Class", "category", "Category"]:
-            if candidate in fieldnames:
-                label_col = candidate
-                break
-        if label_col is None:
-            raise ValueError(
-                f"Could not find label column in CSV. Columns: {fieldnames}"
-            )
-
-        tumor_files = []
-        for row in reader:
-            label = row[label_col].strip().lower()
-            if label != "normal":
-                tumor_files.append(row[filename_col].strip())
-
-    return tumor_files
-
-
-def find_image_file(images_dir: Path, base_name: str) -> Optional[Path]:
-    """Find an image file trying multiple extensions."""
-    for ext in [".jpeg", ".jpg", ".png", ".JPEG", ".JPG", ".PNG"]:
-        img_path = images_dir / f"{base_name}{ext}"
-        if img_path.exists():
-            return img_path
-    # Try the base_name as-is (it may already include extension)
-    img_path = images_dir / base_name
-    if img_path.exists():
-        return img_path
-    return None
-
-
-def rasterize_coco_annotations(json_path: Path, fallback_image_path: Optional[Path] = None) -> Optional[Image.Image]:
-    """Rasterize COCO-style polygon annotations to a binary mask.
-
-    Returns a PIL Image with 0 (background) and 255 (tumor), or None on failure.
-    """
-    with open(json_path, "r") as f:
-        coco_data = json.load(f)
-
-    # Get image dimensions
-    width, height = None, None
-    if "images" in coco_data and len(coco_data["images"]) > 0:
-        img_info = coco_data["images"][0]
-        width = img_info.get("width")
-        height = img_info.get("height")
-
-    # Fallback to reading actual image dimensions
-    if width is None or height is None:
-        if fallback_image_path and fallback_image_path.exists():
-            with Image.open(fallback_image_path) as img:
-                width, height = img.size
-        else:
-            return None
-
-    # Create blank mask
-    mask = Image.new("L", (width, height), 0)
-    draw = ImageDraw.Draw(mask)
-
-    # Draw all annotation polygons
-    annotations = coco_data.get("annotations", [])
-    for ann in annotations:
-        segmentation = ann.get("segmentation", [])
-        for polygon_flat in segmentation:
-            if len(polygon_flat) < 6:
-                # Skip degenerate polygons (fewer than 3 points)
-                continue
-            # Convert flat list [x1,y1,x2,y2,...] to list of (x,y) tuples
-            points = list(zip(polygon_flat[0::2], polygon_flat[1::2]))
-            draw.polygon(points, fill=255)
-
-    return mask
-
-
 def setup_dataset():
     """Convert BTXRD dataset to nnUNet format."""
 
@@ -182,16 +53,11 @@ def setup_dataset():
 
     # Find and extract zip
     zip_files = list(dataset_dir.glob("*.zip"))
-    if not zip_files:
-        print("Error: No .zip file found in dataset directory")
-        return
-
     zip_path = zip_files[0]
     print(f"Extracting {zip_path.name}...")
 
     temp_dir = dataset_dir / "temp_extract"
-    if temp_dir.exists():
-        shutil.rmtree(temp_dir)
+    shutil.rmtree(temp_dir, ignore_errors=True)
 
     with zipfile.ZipFile(zip_path, "r") as z:
         z.extractall(temp_dir)
@@ -324,7 +190,7 @@ def setup_dataset():
     print(f"  - Training labels: {len(list(labels_tr.glob('*.png')))}")
     print(f"  - Test images: {num_test}")
     print(f"  - Test labels: {len(list(labels_ts.glob('*.png')))}")
-    print(f"  - dataset.json updated")
+    print("  - dataset.json updated")
 
 
 if __name__ == "__main__":

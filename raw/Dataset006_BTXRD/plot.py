@@ -7,7 +7,6 @@ Usage:
     python plot.py 000 --test       # Case 000 from test set
 """
 
-import argparse
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -18,14 +17,13 @@ from PIL import Image
 def load_image(case_id: str, split: str = "train") -> np.ndarray:
     """Load grayscale X-ray image."""
     dataset_dir = Path(__file__).parent
-    if split == "train":
-        images_dir = dataset_dir / "imagesTr"
-    else:
-        images_dir = dataset_dir / "imagesTs"
+    images_dir_map = {
+            "train": dataset_dir / "...",
+            "test": dataset_dir / "...",
+        }
+        images_dir = images_dir_map[split]
 
     img_file = images_dir / f"{case_id}_0000.png"
-    if not img_file.exists():
-        raise FileNotFoundError(f"Image not found: {img_file}")
 
     return np.array(Image.open(img_file))
 
@@ -33,14 +31,13 @@ def load_image(case_id: str, split: str = "train") -> np.ndarray:
 def load_label(case_id: str, split: str = "train") -> np.ndarray:
     """Load label for a case."""
     dataset_dir = Path(__file__).parent
-    if split == "train":
-        labels_dir = dataset_dir / "labelsTr"
-    else:
-        labels_dir = dataset_dir / "labelsTs"
+    labels_dir_map = {
+            "train": dataset_dir / "...",
+            "test": dataset_dir / "...",
+        }
+        labels_dir = labels_dir_map[split]
 
     label_file = labels_dir / f"{case_id}.png"
-    if not label_file.exists():
-        raise FileNotFoundError(f"Label not found: {label_file}")
 
     return np.array(Image.open(label_file))
 
@@ -57,12 +54,12 @@ def plot_case(case_id: str, split: str = "train"):
     # Plot X-ray image (grayscale)
     axes[0].imshow(img, cmap="gray")
     axes[0].set_title(f"X-ray Image {case_id}")
-    axes[0].axis("off")
+    axes[0].axis("of")
 
     # Plot tumor mask (grayscale)
     axes[1].imshow(label, cmap="gray")
     axes[1].set_title(f"Tumor Mask {case_id}")
-    axes[1].axis("off")
+    axes[1].axis("of")
 
     # Plot overlay (red semi-transparent highlight)
     img_rgb = np.stack([img, img, img], axis=-1).astype(np.float32) / 255.0
@@ -76,7 +73,8 @@ def plot_case(case_id: str, split: str = "train"):
     axes[2].axis("off")
 
     # Overall title
-    split_name = "Training" if split == "train" else "Test"
+    split_name_map = {"train": "Training", "test": "Test"}
+    split_name = split_name_map[split]
     fig.suptitle(f"{split_name} Case: {case_id}", fontsize=14, fontweight="bold")
 
     plt.tight_layout()
@@ -84,29 +82,13 @@ def plot_case(case_id: str, split: str = "train"):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Visualize BTXRD dataset images and labels"
-    )
-    parser.add_argument(
-        "case_id",
-        help="Case ID to visualize (e.g., 000, 001, 042)",
-    )
-    parser.add_argument(
-        "--test",
-        action="store_true",
-        help="Use test set (default: training set)",
-    )
-
-    args = parser.parse_args()
-
-    split = "test" if args.test else "train"
-
-    try:
-        plot_case(args.case_id, split)
-    except FileNotFoundError as e:
-        print(f"Error: {e}")
-        exit(1)
-
+    case_id = input("Enter case_id: ").strip()
+    test = input("Use test set? (y/n): ").lower() == 'y'
+    plane = input("Plane (all/axial/coronal/sagittal) [all]: ").strip() or "all"
+    
+    split = {True: "test", False: "train"}[test]
+    
+    plot_case(case_id, split, plane)
 
 if __name__ == "__main__":
     main()

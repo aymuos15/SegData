@@ -17,17 +17,6 @@ import nibabel as nib
 from tqdm import tqdm
 
 
-def find_matching_file(directory, patterns):
-    """Find first file matching any pattern (case-insensitive)."""
-    for item in directory.iterdir():
-        if item.is_file():
-            lower_name = item.name.lower()
-            for pattern in patterns:
-                if pattern.lower() in lower_name:
-                    return item
-    return None
-
-
 def setup_dataset():
     """Convert MSLesSeg zip to nnUNet format (FLAIR only)."""
 
@@ -43,91 +32,52 @@ def setup_dataset():
     for d in [images_tr, labels_tr, images_ts, labels_ts]:
         d.mkdir(parents=True, exist_ok=True)
 
-    # Find and extract zip
-    print("Finding and extracting zip file...")
-    zip_files = list(dataset_dir.glob("*.zip"))
-    if not zip_files:
-        print("Error: No .zip file found in dataset directory")
-        return
-
-    zip_path = zip_files[0]
-    print(f"Extracting {zip_path.name}...")
-    with zipfile.ZipFile(zip_path, "r") as z:
-        z.extractall(dataset_dir / "temp_extract")
-
-    # Find the extracted root directory (could be nested)
+    # Extract outer zip
+    print("Extracting zip file...")
     temp_dir = dataset_dir / "temp_extract"
+    outer_zip = dataset_dir / "27919209.zip"
+    with zipfile.ZipFile(outer_zip, "r") as z:
+        z.extractall(temp_dir)
 
-    # Check if there's a nested "MSLesSeg Dataset.zip" that needs extraction
+    # Extract nested MSLesSeg Dataset.zip
+    print("Extracting nested MSLesSeg Dataset.zip...")
     dataset_zip = temp_dir / "MSLesSeg Dataset.zip"
-    if dataset_zip.exists():
-        print(f"Extracting nested MSLesSeg Dataset.zip...")
-        with zipfile.ZipFile(dataset_zip, "r") as z:
-            z.extractall(temp_dir / "dataset_files")
-        extracted_root = temp_dir / "dataset_files"
-    else:
-        extracted_roots = [d for d in temp_dir.iterdir() if d.is_dir()]
-        if len(extracted_roots) == 1:
-            extracted_root = extracted_roots[0]
-        else:
-            extracted_root = temp_dir
+    with zipfile.ZipFile(dataset_zip, "r") as z:
+        z.extractall(temp_dir / "dataset_files")
 
-    print(f"Looking for cases in {extracted_root}")
+    # Hardcode data root
+    data_root = temp_dir / "dataset_files" / "MSLesSeg Dataset"
 
-    # Find all case directories
-    case_dirs = []
-    for root, dirs, files in os.walk(extracted_root):
-        # Look for directories containing imaging files
-        nifti_files = [f for f in files if f.lower().endswith(".nii.gz") or f.lower().endswith(".nii")]
-        if nifti_files:
-            case_dirs.append(Path(root))
+    # Get train and test case directories
+    train_dir = data_root / "train"
+    test_dir = data_root / "test"
 
-    case_dirs = sorted(case_dirs)
+    train_cases = sorted([d for d in train_dir.iterdir() if d.is_dir()])
+    test_cases = sorted([d for d in test_dir.iterdir() if d.is_dir()])
 
-    if not case_dirs:
-        print("Error: No NIfTI files found in extracted directory")
-        return
-
-    print(f"Found {len(case_dirs)} case directories")
-
-    # Determine train/test split
-    train_cases = []
-    test_cases = []
-
-    # Check for train/test subdirectory structure
-    for case_dir in case_dirs:
-        case_path_str = str(case_dir).lower()
-        if "train" in case_path_str or "training" in case_path_str:
-            train_cases.append(case_dir)
-        elif "test" in case_path_str or "testing" in case_path_str:
-            test_cases.append(case_dir)
-        else:
-            # Default to train if no clear split marker
-            train_cases.append(case_dir)
-
-    # If no split detected, use 80/20 split
-    if not test_cases and train_cases:
-        split_idx = int(0.8 * len(train_cases))
-        test_cases = train_cases[split_idx:]
-        train_cases = train_cases[:split_idx]
-
-    print(f"Split: {len(train_cases)} train, {len(test_cases)} test")
+    print(f"Found {len(train_cases)} train cases and {len(test_cases)} test cases")
 
     # Process training cases
     print("Processing training cases...")
     for idx, case_dir in enumerate(tqdm(train_cases)):
         case_id = f"{idx:03d}"
-        process_case(case_dir, case_id, images_tr, labels_tr)
+        flair_file = case_dir / f"{case_dir.name}_FLAIR.nii.gz"
+        mask_file = case_dir / f"{case_dir.name}_MASK.nii.gz"
+        shutil.copy(flair_file, images_tr / f"{case_id}_0000.nii.gz")
+        shutil.copy(mask_file, labels_tr / f"{case_id}.nii.gz")
 
     # Process test cases
     print("Processing test cases...")
     for idx, case_dir in enumerate(tqdm(test_cases)):
         case_id = f"{idx:03d}"
-        process_case(case_dir, case_id, images_ts, labels_ts)
+        flair_file = case_dir / f"{case_dir.name}_FLAIR.nii.gz"
+        mask_file = case_dir / f"{case_dir.name}_MASK.nii.gz"
+        shutil.copy(flair_file, images_ts / f"{case_id}_0000.nii.gz")
+        shutil.copy(mask_file, labels_ts / f"{case_id}.nii.gz")
 
     # Cleanup temp directory
     print("Cleaning up...")
-    shutil.rmtree(temp_dir)
+    shutil.rmtree(temp_dir, ignore_errors=True)
 
     # Update dataset.json
     print("Updating dataset.json...")
@@ -157,30 +107,7 @@ def setup_dataset():
     print(f"  - Training labels: {len(list(labels_tr.glob('*.nii.gz')))} files")
     print(f"  - Test images: {len(test_cases)} FLAIR files")
     print(f"  - Test labels: {len(list(labels_ts.glob('*.nii.gz')))} files")
-    print(f"  - dataset.json updated")
-
-
-def process_case(case_dir, case_id, images_dir, labels_dir):
-    """Process a single case: find and copy FLAIR and mask files only."""
-    # Find FLAIR file
-    flair_file = find_matching_file(case_dir, ["flair"])
-    if not flair_file:
-        print(f"Warning: FLAIR not found in {case_dir.name}")
-        return
-
-    # Find mask/lesion file
-    mask_file = find_matching_file(case_dir, ["mask", "lesion"])
-    if not mask_file:
-        print(f"Warning: Mask not found in {case_dir.name}")
-        return
-
-    # Copy FLAIR and mask to nnUNet format
-    try:
-        shutil.copy(flair_file, images_dir / f"{case_id}_0000.nii.gz")
-        shutil.copy(mask_file, labels_dir / f"{case_id}.nii.gz")
-    except Exception as e:
-        print(f"Error copying files for case {case_id}: {e}")
-        return
+    print("  - dataset.json updated")
 
 
 if __name__ == "__main__":
